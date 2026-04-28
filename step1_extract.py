@@ -27,7 +27,6 @@ from config import (
     RAW_TRADES_FILE,
 )
 
-
 # ---------------------------------------------------------------
 # DST HELPERS
 # ---------------------------------------------------------------
@@ -128,7 +127,18 @@ def is_market_gap(prev_dt, curr_dt):
 # TRADE SIMULATION
 # ---------------------------------------------------------------
 
-def simulate_trade(direction, entry, stop_loss, distance, minute_df, candle_close_dt):
+def simulate_trade(
+    direction,
+    entry,
+    stop_loss,
+    distance,
+    minute_times,
+    minute_open,
+    minute_high,
+    minute_low,
+    minute_gap_from_prev,
+    candle_close_dt,
+):
     """
     Simulates a trade forward through 1-minute candles starting from
     the 4H candle's close time. Detects gap SLs from market close windows.
@@ -149,59 +159,72 @@ def simulate_trade(direction, entry, stop_loss, distance, minute_df, candle_clos
             negative float  -> gap stop loss
     """
     # All candles strictly after the 4H candle closed
-    future = minute_df[minute_df.index >= candle_close_dt]
+    start_pos = int(np.searchsorted(minute_times, candle_close_dt.to_datetime64(), side="left"))
 
-    if future.empty:
+    if start_pos >= len(minute_times):
         return 0.0, "SL"
 
     max_favorable = 0.0
-    # prev_dt starts at the 4H close so the first candle gap is measured correctly
-    prev_dt = candle_close_dt
+    sub_open = minute_open[start_pos:]
+    sub_high = minute_high[start_pos:]
+    sub_low = minute_low[start_pos:]
+    sub_len = len(sub_open)
 
-    for curr_dt, row in future.iterrows():
+    # Gap check for first row compares against candle_close_dt (not prior minute row).
+    first_is_gap = is_market_gap(candle_close_dt, pd.Timestamp(minute_times[start_pos]))
 
-        # ---- Gap check ------------------------------------------------
-        # If there is a timestamp jump, price may have gapped past SL.
-        # post_gap_price = open of first candle after the gap.
-        if is_market_gap(prev_dt, curr_dt):
-            post_gap_price = row["open"]
+    if direction == "Buy":
+        normal_mask = sub_low <= stop_loss
+        first_gap_hit = first_is_gap and (sub_open[0] < stop_loss)
+        later_gap_mask = minute_gap_from_prev[start_pos + 1:] & (sub_open[1:] < stop_loss) if sub_len > 1 else np.array([], dtype=bool)
+        favorable_arr = sub_high - entry
+    else:
+        normal_mask = sub_high >= stop_loss
+        first_gap_hit = first_is_gap and (sub_open[0] > stop_loss)
+        later_gap_mask = minute_gap_from_prev[start_pos + 1:] & (sub_open[1:] > stop_loss) if sub_len > 1 else np.array([], dtype=bool)
+        favorable_arr = entry - sub_low
 
-            if direction == "Buy" and post_gap_price < stop_loss:
+    normal_hits = np.flatnonzero(normal_mask)
+    first_normal_idx = int(normal_hits[0]) if normal_hits.size else None
+
+    if first_gap_hit:
+        first_gap_idx = 0
+    else:
+        later_gap_hits = np.flatnonzero(later_gap_mask)
+        first_gap_idx = int(later_gap_hits[0]) + 1 if later_gap_hits.size else None
+
+    exit_idx = None
+    exit_kind = None
+    if first_gap_idx is not None and (first_normal_idx is None or first_gap_idx <= first_normal_idx):
+        exit_idx = first_gap_idx
+        exit_kind = "gap"
+    elif first_normal_idx is not None:
+        exit_idx = first_normal_idx
+        exit_kind = "normal"
+
+    if exit_idx is not None:
+        if exit_idx > 0:
+            max_favorable = float(np.max(favorable_arr[:exit_idx]))
+            if max_favorable < 0:
+                max_favorable = 0.0
+
+        if exit_kind == "gap":
+            post_gap_price = float(sub_open[exit_idx])
+            if direction == "Buy":
                 gap_value = -((entry - post_gap_price) / distance)
-                return round(max_favorable, 6), round(gap_value, 4)
-
-            if direction == "Sell" and post_gap_price > stop_loss:
+            else:
                 gap_value = -((post_gap_price - entry) / distance)
-                return round(max_favorable, 6), round(gap_value, 4)
+            return round(max_favorable, 6), round(gap_value, 4)
 
-            # Gap did not trigger SL — trade continues from post-gap candle.
-            # Fall through to normal SL check below for this same candle.
-
-        # ---- Normal SL check ------------------------------------------
-        if direction == "Buy":
-            if row["low"] <= stop_loss:
-                rr = max_favorable / distance
-                rr_value = round(rr, 1) if rr >= MIN_RR else "SL"
-                return round(max_favorable, 6), rr_value
-            # Track highest favorable point (max high above entry)
-            favorable = row["high"] - entry
-            if favorable > max_favorable:
-                max_favorable = favorable
-
-        elif direction == "Sell":
-            if row["high"] >= stop_loss:
-                rr = max_favorable / distance
-                rr_value = round(rr, 1) if rr >= MIN_RR else "SL"
-                return round(max_favorable, 6), rr_value
-            # Track lowest favorable point (max drop below entry)
-            favorable = entry - row["low"]
-            if favorable > max_favorable:
-                max_favorable = favorable
-
-        prev_dt = curr_dt
+        rr = max_favorable / distance
+        rr_value = round(rr, 1) if rr >= MIN_RR else "SL"
+        return round(max_favorable, 6), rr_value
 
     # End of data reached without SL being hit.
     # Record whatever max_profit was accumulated.
+    max_favorable = float(np.max(favorable_arr)) if sub_len else 0.0
+    if max_favorable < 0:
+        max_favorable = 0.0
     rr = max_favorable / distance if distance > 0 else 0.0
     rr_value = round(rr, 1) if rr >= MIN_RR else "SL"
     return round(max_favorable, 6), rr_value
@@ -219,6 +242,14 @@ def run():
     # -- Load --
     print(f"\nLoading 1-minute data from '{RAW_DATA_FILE}'...")
     minute_df = load_minute_data(RAW_DATA_FILE)
+    minute_times = minute_df.index.values
+    minute_open = minute_df["open"].to_numpy()
+    minute_high = minute_df["high"].to_numpy()
+    minute_low = minute_df["low"].to_numpy()
+    minute_gap_from_prev = np.zeros(len(minute_times), dtype=bool)
+    if len(minute_times) > 1:
+        gap_seconds = (minute_times[1:] - minute_times[:-1]) / np.timedelta64(1, "s")
+        minute_gap_from_prev[1:] = gap_seconds > 90
     print(f"  Loaded   : {len(minute_df):,} 1-minute candles")
     print(f"  From     : {minute_df.index[0]}")
     print(f"  To       : {minute_df.index[-1]}")
@@ -269,7 +300,7 @@ def run():
         # -- Run simulation --
         max_profit, reward_risk = simulate_trade(
             direction, entry, stop_loss, distance,
-            minute_df, candle_close_dt,
+            minute_times, minute_open, minute_high, minute_low, minute_gap_from_prev, candle_close_dt,
         )
 
         trades.append({
