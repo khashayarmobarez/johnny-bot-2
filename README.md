@@ -1,150 +1,126 @@
-# Forex Trading Strategy Backtesting Pipeline
+# Janyar Trade Strategy Pipeline
 
-## Project Overview
+This project implements a multi‑step pipeline for analyzing forex trading strategies based on 1‑minute EUR/USD data.
 
-This project implements a systematic pipeline for backtesting forex trading strategies using 1-minute candle data. The pipeline processes raw market data, simulates trades based on 4-hour candle signals, and evaluates performance metrics including gap stop-loss detection and reward/risk analysis.
+## Pipeline Overview
 
 The pipeline consists of six sequential steps:
 
-1. **Base Data Extraction** - Resamples 1-minute data to 4-hour candles and simulates trades
-2. **Grouping** - Groups trades by reward/risk thresholds
-3. **Filtering** - Applies filtering criteria to select optimal trade sets
-4. **Lists Generation** - Creates trade lists for further analysis
-5. **Rescoring** - Recalculates performance metrics
-6. **Drawdown Analysis** - Evaluates portfolio drawdown characteristics
+1. **Base Data Extraction (`step1_extract.py`)**
+   - Loads raw 1‑minute data (`data.csv`)
+   - Resamples to 4‑hour candles
+   - Simulates trades with entry/SL offsets
+   - Outputs `trades.csv` with reward/risk ratios
 
-## Project Structure
+2. **Group by Distance and Type (`step2_grouped.py`)**
+   - Splits trades into CSV files per distance and direction (Buy/Sell)
+   - Creates `step2_grouped/` folder
 
-```
-├── .gitignore               # Python and project-specific ignores
-├── config.py                # Configuration constants and file paths
-├── requirements.txt         # Python dependencies
-├── step1_extract.py         # Step 1: Data extraction and trade simulation
-├── README.md                # This file
-├── data.csv                 # Raw 1-minute forex data (not in repo)
-├── trades.csv               # Output of step 1 (generated)
-├── step2_grouped/           # Output folder for step 2 (generated)
-├── step3_filtered/          # Output folder for step 3 (generated)
-├── step4_lists/             # Output folder for step 4 (generated)
-├── step5_rescore_summary.csv # Output of step 5 (generated)
-└── step6_drawdown_summary.csv # Output of step 6 (generated)
-```
+3. **Score and Filter (`step3_filtered.py`)**
+   - For each reward/risk threshold (positive integer values)
+   - Computes a score for each grouped file
+   - Keeps only files with score > 0
+   - Creates `step3_filtered/` folder with surviving files per threshold
 
-## Installation and Requirements
+4. **Build Date‑Ordered Lists (`step4_lists.py`)**
+   - For each surviving file, creates two date‑ordered lists:
+     - Ascending (earliest trades first)
+     - Descending (latest trades first)
+   - Stores lists in `step4_lists/` folder
 
-### Prerequisites
+5. **Re‑score the Lists (`step5_rescore.py`)**
+   - Re‑computes scores for each date‑ordered list
+   - Produces `step5_rescore_summary.csv` with threshold, distance, type, date‑order, and score
 
-- Python 3.8 or higher
-- pip package manager
-
-### Installation
-
-1. Clone the repository:
-
-```bash
-git clone <repository-url>
-cd project
-```
-
-2. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-### Dependencies
-
-- pandas>=2.0.0
-- numpy>=1.24.0
-
-## Usage
-
-### Step 1: Base Data Extraction
-
-Run the initial extraction and trade simulation:
-
-```bash
-python step1_extract.py
-```
-
-This will:
-
-- Load 1-minute OHLCV data from `data.csv`
-- Resample to 4-hour candles
-- Simulate trades (Buy/Sell) at each candle close
-- Detect normal and gap stop-losses
-- Output results to `trades.csv`
-
-### Output Format (trades.csv)
-
-| Column      | Description                                                                                        |
-| ----------- | -------------------------------------------------------------------------------------------------- |
-| date        | Trade date (YYYY-MM-DD)                                                                            |
-| time        | Trade time (HH:MM)                                                                                 |
-| day_of_week | Day of week                                                                                        |
-| type        | "Buy" or "Sell"                                                                                    |
-| entry       | Entry price                                                                                        |
-| stop_loss   | Stop loss price                                                                                    |
-| distance    | Absolute difference between entry and stop loss                                                    |
-| max_profit  | Maximum favorable price movement before SL hit                                                     |
-| reward_risk | Trade outcome: positive float (win ≥ 1.0), "SL" (normal stop loss), negative float (gap stop loss) |
-
-### Subsequent Steps
-
-Steps 2-6 are not yet implemented but are planned as part of the pipeline:
-
-- **Step 2**: Group trades by reward/risk thresholds
-- **Step 3**: Filter trades based on performance criteria
-- **Step 4**: Generate trade lists for portfolio construction
-- **Step 5**: Rescore selected trades
-- **Step 6**: Analyze portfolio drawdown
+6. **Lowest Drawdown (`step6_drawdown.py`)**
+   - Computes the lowest drawdown (most negative cumulative profit) for each list
+   - Produces `step6_drawdown_summary.csv` with threshold, distance, type, date‑order, and drawdown
 
 ## Configuration
 
-Edit `config.py` to adjust trading parameters:
+Constants are centralized in `config.py`:
 
-| Parameter                | Description                                 | Default                      |
-| ------------------------ | ------------------------------------------- | ---------------------------- |
-| ENTRY_OFFSET             | Offset from candle close for entry price    | 0.3                          |
-| SL_OFFSET                | Offset from candle high/low for stop loss   | 0.3                          |
-| MIN_RR                   | Minimum reward/risk ratio to count as a win | 1.0                          |
-| DAILY_CLOSE_HOUR_EST     | Daily close hour (UTC) during EST period    | 22                           |
-| DAILY_CLOSE_HOUR_EDT     | Daily close hour (UTC) during EDT period    | 21                           |
-| DAILY_CLOSE_DURATION_MIN | Duration of daily close window (minutes)    | 60                           |
-| POST_OPEN_LOCKOUT_MIN    | Lockout period after market open (minutes)  | 15                           |
-| DAILY_ILLIQUID_MIN       | Total illiquid period (minutes)             | 75                           |
-| WEEKLY_CLOSE_WEEKDAY     | Weekly close weekday (0=Monday, 4=Friday)   | 4                            |
-| WEEKLY_REOPEN_WEEKDAY    | Weekly reopen weekday (0=Monday, 6=Sunday)  | 6                            |
-| PENALTY_PER_N_TRADES     | Penalty factor for trade frequency          | 10                           |
-| RAW_DATA_FILE            | Input 1-minute data file                    | "data.csv"                   |
-| RAW_TRADES_FILE          | Output trades file                          | "trades.csv"                 |
-| GROUPED_FOLDER           | Folder for step 2 output                    | "step2_grouped"              |
-| FILTERED_FOLDER          | Folder for step 3 output                    | "step3_filtered"             |
-| LISTS_FOLDER             | Folder for step 4 output                    | "step4_lists"                |
-| RESCORE_FILE             | Step 5 output file                          | "step5_rescore_summary.csv"  |
-| DRAWDOWN_FILE            | Step 6 output file                          | "step6_drawdown_summary.csv" |
+- `ENTRY_OFFSET`, `SL_OFFSET`: entry and stop‑loss offsets (in pips)
+- `MIN_RR`: minimum reward‑risk ratio for a “win”
+- Daily/weekly close parameters
+- Folder names and output file paths
 
-## Input Data Format
+## Quick‑Start
 
-Place your 1-minute forex data in `data.csv` with the following format (no headers):
+1. **Prepare data**: Ensure `data.csv` (1‑minute EUR/USD candles) is present.
+
+2. **Run Step 1** (if not already done):
+
+   ```bash
+   python step1_extract.py
+   ```
+
+   _Note:_ This step may take a long time due to the large dataset. For quick testing, you can use a smaller sample (see below).
+
+3. **Run Steps 2‑6** sequentially:
+   ```bash
+   python step2_grouped.py
+   python step3_filtered.py
+   python step4_lists.py
+   python step5_rescore.py
+   python step6_drawdown.py
+   ```
+
+Each step prints progress and writes outputs to the designated folders.
+
+## Testing with a Small Dataset
+
+To verify the pipeline quickly, you can run Step 1 on a reduced dataset:
+
+```bash
+# Create a sample of 10,000 rows from data.csv
+powershell -command "(Get-Content data.csv -TotalCount 10000) | Set-Content sample_data.csv"
+
+# Temporarily set RAW_DATA_FILE to sample_data.csv in config.py
+# Then run step1_extract.py
+python step1_extract.py
+```
+
+After Step 1 completes, revert `config.py` to `data.csv` and proceed with Steps 2‑6.
+
+## Results
+
+The final summaries (`step5_rescore_summary.csv` and `step6_drawdown_summary.csv`) provide a comprehensive view of which distance‑type‑order combinations perform best under each reward‑risk threshold.
+
+## Dependencies
+
+- Python 3.7+
+- pandas
+- numpy
+
+## File Structure
 
 ```
-date,time,open,high,low,close,volume
-2025-01-01,00:00,1.23456,1.23478,1.23412,1.23445,1000
-2025-01-01,00:01,1.23446,1.23489,1.23411,1.23467,1200
-...
+.
+├── data.csv                    # Raw 1‑minute EUR/USD data (≈351 MB)
+├── trades.csv                  # Extracted trades (Step 1 output)
+├── config.py                   # Shared constants
+├── step1_extract.py            # Step 1 – Base extraction
+├── step2_grouped.py            # Step 2 – Group by distance/type
+├── step3_filtered.py           # Step 3 – Score and filter
+├── step4_lists.py              # Step 4 – Date‑ordered lists
+├── step5_rescore.py            # Step 5 – Re‑score lists
+├── step6_drawdown.py           # Step 6 – Lowest drawdown
+├── pipeline_design.md          # Original pipeline specification
+├── README.md                   # This file
+├── step2_grouped/              # Step 2 output folder
+├── step3_filtered/             # Step 3 output folder
+├── step4_lists/                # Step 4 output folder
+└── step5_rescore_summary.csv   # Step 5 summary
+└── step6_drawdown_summary.csv  # Step 6 summary
 ```
 
-Columns:
+## Notes
 
-1. Date (YYYY-MM-DD)
-2. Time (HH:MM)
-3. Open price
-4. High price
-5. Low price
-6. Close price
-7. Volume
+- Step 1 uses a loop‑based simulation that can be slow for large datasets. Consider vectorization or parallelization for production‑scale runs.
+- The scoring formula includes a penalty of `floor(n_trades / 10)` to discourage over‑fitting.
+- Gap‑SL trades are recorded as negative reward‑risk ratios.
 
 ## License
 
-This project is for educational and research purposes.
+Proprietary – For internal use only.
