@@ -43,26 +43,28 @@ def get_loss_event_indices(df):
     return np.flatnonzero((is_sl | is_gap).to_numpy())
 
 
+# REPLACE WITH
 def compute_lowest_drawdown(values, loss_indices):
-    """
-    For each loss event position as a starting index,
-    slices values from that index to end, computes cumulative sum,
-    records the minimum reached. Returns the single lowest value
-    across all starting points and the index that produced it.
-    """
     if len(loss_indices) == 0:
         return 0.0, None
 
-    lowest = float("inf")
-    best_start = None
+    # Full cumulative sum of the entire list
+    cumsum = np.cumsum(values)
 
-    for start_idx in loss_indices:
-        segment = values[start_idx:]
-        cumsum = np.cumsum(segment)
-        min_val = float(np.min(cumsum))
-        if min_val < lowest:
-            lowest = min_val
-            best_start = int(start_idx)
+    # Suffix minimum: suffix_min[i] = min(cumsum[i], cumsum[i+1], ..., cumsum[-1])
+    suffix_min = np.minimum.accumulate(cumsum[::-1])[::-1]
+
+    # For each starting index i, the min of the segment cumsum is:
+    #   suffix_min[i] - (cumsum[i-1] if i > 0 else 0)
+    prev_cumsum = np.empty(len(cumsum))
+    prev_cumsum[0] = 0.0
+    prev_cumsum[1:] = cumsum[:-1]
+
+    segment_mins = suffix_min[loss_indices] - prev_cumsum[loss_indices]
+
+    best_pos = int(np.argmin(segment_mins))
+    lowest   = float(segment_mins[best_pos])
+    best_start = int(loss_indices[best_pos])
 
     return lowest, best_start
 
