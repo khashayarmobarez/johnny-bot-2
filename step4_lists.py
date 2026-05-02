@@ -1,58 +1,55 @@
+# step4_lists.py
+# Merges all surviving files per threshold into a single date-ordered list.
+# Output: step4_lists/list_rr_{T}.csv for each threshold T.
+
 import pandas as pd
 import os
 from config import FILTERED_FOLDER, LISTS_FOLDER
 
 
 def main():
-    """
-    Step 4 – Build Date‑Ordered Lists.
-    For each surviving file in step3_filtered (per threshold),
-    create two lists:
-      1. Ascending by date (earliest first)
-      2. Descending by date (latest first)
-    Save them to step4_lists.
-    """
-    # Ensure filtered folder exists
     if not os.path.exists(FILTERED_FOLDER):
         print(f"ERROR: {FILTERED_FOLDER} not found. Run step3_filtered.py first.")
         return
 
-    # Ensure lists folder exists
     os.makedirs(LISTS_FOLDER, exist_ok=True)
 
-    # Process each threshold subfolder
-    for threshold_dir in os.listdir(FILTERED_FOLDER):
+    # Each subdirectory in FILTERED_FOLDER is a threshold value
+    for threshold_dir in sorted(os.listdir(FILTERED_FOLDER), key=lambda x: int(x) if x.isdigit() else -1):
         subfolder = os.path.join(FILTERED_FOLDER, threshold_dir)
-        if not os.path.isdir(subfolder):
+
+        if not os.path.isdir(subfolder) or not threshold_dir.isdigit():
             continue
 
-        # Create corresponding subfolder in lists folder
-        list_subfolder = os.path.join(LISTS_FOLDER, threshold_dir)
-        os.makedirs(list_subfolder, exist_ok=True)
+        T = int(threshold_dir)
+        frames = []
 
-        # Process each CSV file in the threshold subfolder
         for filename in os.listdir(subfolder):
             if not filename.endswith(".csv"):
                 continue
-
             filepath = os.path.join(subfolder, filename)
             df = pd.read_csv(filepath)
+            if not df.empty:
+                frames.append(df)
 
-            # Sort ascending by date (assuming 'date' column exists)
-            df_asc = df.sort_values("date")
-            asc_filename = f"{filename}_asc.csv"
-            asc_path = os.path.join(list_subfolder, asc_filename)
-            df_asc.to_csv(asc_path, index=False)
+        if not frames:
+            print(f"Threshold {T}: no surviving trades, skipping.")
+            continue
 
-            # Sort descending by date
-            df_desc = df.sort_values("date", ascending=False)
-            desc_filename = f"{filename}_desc.csv"
-            desc_path = os.path.join(list_subfolder, desc_filename)
-            df_desc.to_csv(desc_path, index=False)
+        merged = pd.concat(frames, ignore_index=True)
 
-        print(f"Threshold {threshold_dir}: processed {len(os.listdir(subfolder))} files")
+        # Sort by date then time ascending
+        merged["_datetime"] = pd.to_datetime(
+            merged["date"].astype(str) + " " + merged["time"].astype(str)
+        )
+        merged = merged.sort_values("_datetime").drop(columns=["_datetime"])
+        merged = merged.reset_index(drop=True)
 
-    print(f"Step 4 complete. Lists saved to {LISTS_FOLDER}")
+        out_path = os.path.join(LISTS_FOLDER, f"list_rr_{T}.csv")
+        merged.to_csv(out_path, index=False)
+        print(f"Threshold {T}: {len(merged)} trades → {out_path}")
+
+    print(f"\nStep 4 complete. Lists saved to {LISTS_FOLDER}.")
 
 
 if __name__ == "__main__":

@@ -1,102 +1,118 @@
+# step6_drawdown.py
+# Computes the lowest drawdown for each list from step4,
+# across every reward level R from 1 to max available.
+# Output: step6_drawdown_summary.csv
+
 import pandas as pd
+import numpy as np
 import os
-from config import LISTS_FOLDER, DRAWDOWN_FILE
+from config import LISTS_FOLDER, DRAWDOWN_FILE, MIN_RR
 
 
-def compute_drawdown(df, threshold):
+def get_trade_values(df, reward_level):
     """
-    Compute lowest drawdown (most negative) for a list.
-    Profit per trade = distance * reward_risk (if numeric)
-      If reward_risk == "SL": profit = -distance
-      If reward_risk is numeric negative (gap SL): profit = reward_risk * distance (negative)
+    Converts each trade's reward_risk into a numeric score value
+    for the given reward level R:
+        >= R          → +R
+        == "SL"       → -1
+        negative float → the negative value itself (e.g. -3.33)
+        positive < R  → -1
     """
-    profit_series = []
-    for _, row in df.iterrows():
-        rr = row["reward_risk"]
-        distance = row["distance"]
-        if rr == "SL":
-            profit = -distance
-        else:
-            profit = float(rr) * distance
-        profit_series.append(profit)
+    numeric_rr = pd.to_numeric(df["reward_risk"], errors="coerce")
+    values = np.where(
+        df["reward_risk"] == "SL", -1.0,
+        np.where(
+            numeric_rr < 0, numeric_rr,
+            np.where(
+                numeric_rr >= reward_level, float(reward_level),
+                -1.0
+            )
+        )
+    )
+    return values.astype(float)
 
-    # Cumulative profit
-    cumulative = 0
-    max_cumulative = 0
-    lowest_drawdown = 0
-    for profit in profit_series:
-        cumulative += profit
-        if cumulative > max_cumulative:
-            max_cumulative = cumulative
-        drawdown = cumulative - max_cumulative  # negative or zero
-        if drawdown < lowest_drawdown:
-            lowest_drawdown = drawdown
 
-    return lowest_drawdown
+def get_loss_event_indices(df):
+    """
+    Returns indices of all trades that are a loss event:
+    either "SL" or a negative float (gap SL).
+    """
+    numeric_rr = pd.to_numeric(df["reward_risk"], errors="coerce")
+    is_sl  = df["reward_risk"] == "SL"
+    is_gap = numeric_rr < 0
+    return np.flatnonzero((is_sl | is_gap).to_numpy())
+
+
+def compute_lowest_drawdown(values, loss_indices):
+    """
+    For each loss event position as a starting index,
+    slices values from that index to end, computes cumulative sum,
+    records the minimum reached. Returns the single lowest value
+    across all starting points and the index that produced it.
+    """
+    if len(loss_indices) == 0:
+        return 0.0, None
+
+    lowest = float("inf")
+    best_start = None
+
+    for start_idx in loss_indices:
+        segment = values[start_idx:]
+        cumsum = np.cumsum(segment)
+        min_val = float(np.min(cumsum))
+        if min_val < lowest:
+            lowest = min_val
+            best_start = int(start_idx)
+
+    return lowest, best_start
 
 
 def main():
-    """
-    Step 6 – Lowest Drawdown.
-    For each threshold, distance, type, date‑order combination,
-    compute the lowest drawdown (most negative) and write summary.
-    """
     if not os.path.exists(LISTS_FOLDER):
         print(f"ERROR: {LISTS_FOLDER} not found. Run step4_lists.py first.")
         return
 
     summary_rows = []
 
-    # Walk through step4_lists folder
-    for threshold_dir in os.listdir(LISTS_FOLDER):
-        list_subfolder = os.path.join(LISTS_FOLDER, threshold_dir)
-        if not os.path.isdir(list_subfolder):
+    for filename in sorted(os.listdir(LISTS_FOLDER)):
+        if not filename.startswith("list_rr_") or not filename.endswith(".csv"):
             continue
 
-        threshold = int(threshold_dir)
+        T = int(filename.replace("list_rr_", "").replace(".csv", ""))
+        filepath = os.path.join(LISTS_FOLDER, filename)
+        df = pd.read_csv(filepath).reset_index(drop=True)
 
-        # Process each CSV file in the subfolder
-        for filename in os.listdir(list_subfolder):
-            if not filename.endswith(".csv"):
-                continue
+        if df.empty:
+            continue
 
-            # Extract original grouped file name and date order
-            if filename.endswith("_asc.csv"):
-                original_name = filename[:-8]
-                date_order = "asc"
-            elif filename.endswith("_desc.csv"):
-                original_name = filename[:-9]
-                date_order = "desc"
-            else:
-                continue
+        # Reward levels: 1 up to the max integer RR in this list
+        numeric_rr = pd.to_numeric(df["reward_risk"], errors="coerce")
+        positive_rr = numeric_rr[numeric_rr >= MIN_RR]
 
-            # Parse distance and type from original_name
-            parts = original_name.split("_")
-            if len(parts) < 3:
-                continue
-            direction = parts[0]  # Buy/Sell
-            distance_str = parts[2].replace(".csv", "")
-            distance = int(distance_str)
+        if positive_rr.empty:
+            continue
 
-            filepath = os.path.join(list_subfolder, filename)
-            df = pd.read_csv(filepath)
-            lowest_dd = compute_drawdown(df, threshold)
+        max_reward = int(np.floor(positive_rr.max()))
+        reward_levels = range(1, max_reward + 1)
+        loss_indices = get_loss_event_indices(df)
+
+        for R in reward_levels:
+            values = get_trade_values(df, R)
+            lowest_dd, best_start = compute_lowest_drawdown(values, loss_indices)
 
             summary_rows.append({
-                "threshold": threshold,
-                "distance": distance,
-                "type": direction,
-                "date_order": date_order,
-                "lowest_drawdown": lowest_dd,
-                "filename": filename,
-                "n_trades": len(df),
+                "rr_threshold"    : T,
+                "reward_level"    : R,
+                "lowest_drawdown" : round(lowest_dd, 4),
+                "starting_index"  : best_start,
+                "total_trades"    : len(df),
             })
 
-    # Write summary CSV
-    df_summary = pd.DataFrame(summary_rows)
-    df_summary.to_csv(DRAWDOWN_FILE, index=False)
-    print(f"Step 6 complete. Summary saved to {DRAWDOWN_FILE}")
-    print(f"Total combinations: {len(summary_rows)}")
+        print(f"Threshold {T}: reward levels 1–{max_reward} computed.")
+
+    summary_df = pd.DataFrame(summary_rows)
+    summary_df.to_csv(DRAWDOWN_FILE, index=False)
+    print(f"\nStep 6 complete. Summary saved to {DRAWDOWN_FILE}.")
 
 
 if __name__ == "__main__":

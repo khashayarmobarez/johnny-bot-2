@@ -5,33 +5,30 @@ import numpy as np
 from config import GROUPED_FOLDER, FILTERED_FOLDER, MIN_RR
 
 
+
 def compute_score(df, threshold):
-    """
-    Compute score for a DataFrame using the formula:
-    score = sum(T for reward_risk >= T)
-          - sum(1 for reward_risk == "SL")
-          + sum(reward_risk for negative reward_risk)
-          - floor(total_trades / 10)
-    """
     total_trades = len(df)
-
-    # Convert reward_risk column for numeric processing
     numeric_rr = pd.to_numeric(df["reward_risk"], errors="coerce")
-    # Positive RR >= threshold
+
+    # Trades at or above threshold: +T each
     wins = numeric_rr >= threshold
-    win_score = wins.sum() * threshold
+    win_score = int(wins.sum()) * threshold
 
-    # SL trades (string "SL")
+    # Positive trades below threshold: -1 each
+    below_threshold = (numeric_rr > 0) & (numeric_rr < threshold)
+    below_score = -int(below_threshold.sum())
+
+    # Normal SL: -1 each
     sl_trades = df["reward_risk"] == "SL"
-    sl_score = -sl_trades.sum()
+    sl_score = -int(sl_trades.sum())
 
-    # Negative RR (gap SL) – already numeric negative
+    # Gap SL (negative float): add the value directly
     negative_rr = numeric_rr[numeric_rr < 0]
-    negative_score = negative_rr.sum()
+    negative_score = float(negative_rr.sum())
 
     penalty = math.floor(total_trades / 10)
 
-    score = win_score + sl_score + negative_score - penalty
+    score = win_score + below_score + sl_score + negative_score - penalty
     return score
 
 
