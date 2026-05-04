@@ -63,17 +63,19 @@ score -= floor(total_trades / 10)
 
 ### Step 6 — Lowest Drawdown (`step6_drawdown.py`)
 
-- For each merged list from Step 4, and for every reward level `R` from 1 to the maximum R/R present in that list:
+- For each merged list from Step 4, computes the lowest drawdown using
+  the matching reward level (reward_level == rr_threshold):
   - Converts each trade to a score value:
-    - `reward_risk >= R` → `+R`
+    - `reward_risk >= T` → `+T`
     - `reward_risk == "SL"` → `-1`
     - `reward_risk` is negative (gap SL) → the negative value itself
-    - `0 < reward_risk < R` → `-1`
+    - `0 < reward_risk < T` → `-1`
   - Finds all loss-event positions (SL or negative)
-  - For each loss-event position as a starting index, slices to the end of the list, computes the running cumulative sum, and records the minimum reached
-  - The result for `(T, R)` is the single lowest value across all starting points
+  - For each loss-event position as a starting index, slices to the end of the list,
+    computes the running cumulative sum, and records the minimum reached
+  - The result for threshold `T` is the single lowest value across all starting points
 - Output file: `step6_drawdown_summary.csv`
-- Columns: `rr_threshold`, `reward_level`, `lowest_drawdown`, `starting_index`, `total_trades`
+- Columns: `rr_threshold`, `lowest_drawdown`, `starting_index`, `total_trades`
 
 ---
 

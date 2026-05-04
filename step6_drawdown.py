@@ -94,23 +94,19 @@ def main():
         if positive_rr.empty:
             continue
 
-        max_reward = int(np.floor(positive_rr.max()))
-        reward_levels = range(1, max_reward + 1)
+        # REPLACE WITH
         loss_indices = get_loss_event_indices(df)
+        values = get_trade_values(df, T)
+        lowest_dd, best_start = compute_lowest_drawdown(values, loss_indices)
 
-        for R in reward_levels:
-            values = get_trade_values(df, R)
-            lowest_dd, best_start = compute_lowest_drawdown(values, loss_indices)
+        summary_rows.append({
+            "rr_threshold"    : T,
+            "lowest_drawdown" : round(lowest_dd, 4),
+            "starting_index"  : best_start,
+            "total_trades"    : len(df),
+        })
 
-            summary_rows.append({
-                "rr_threshold"    : T,
-                "reward_level"    : R,
-                "lowest_drawdown" : round(lowest_dd, 4),
-                "starting_index"  : best_start,
-                "total_trades"    : len(df),
-            })
-
-        print(f"Threshold {T}: reward levels 1–{max_reward} computed.")
+        print(f"Threshold {T}: drawdown computed.")
 
     summary_df = pd.DataFrame(summary_rows)
     summary_df.to_csv(DRAWDOWN_FILE, index=False)
