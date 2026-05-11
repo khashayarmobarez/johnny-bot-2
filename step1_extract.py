@@ -63,25 +63,25 @@ def get_daily_close_hour(dt):
 # DATA LOADING
 # ---------------------------------------------------------------
 
+# REPLACE WITH
 def load_minute_data(filepath):
-    """
-    Loads 1-minute OHLCV CSV with no headers.
-    Expected column order: date, time, open, high, low, close, volume
-    """
     df = pd.read_csv(
         filepath,
+        sep=";",
         header=None,
-        names=["date", "time", "open", "high", "low", "close", "volume"],
+        names=["datetime", "open", "high", "low", "close", "volume"],
     )
-    df["datetime"] = pd.to_datetime(df["date"] + " " + df["time"])
-    df = df.drop(columns=["date", "time"])
+    df["datetime"] = pd.to_datetime(df["datetime"], format="%Y.%m.%d %H:%M")
     df = df.set_index("datetime").sort_index()
 
-    # Ensure numeric types
     for col in ["open", "high", "low", "close", "volume"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["open", "high", "low", "close"])
+
+    # Remove all data before 2012
+    df = df[df.index >= "2012-01-01"]
+
     return df
 
 

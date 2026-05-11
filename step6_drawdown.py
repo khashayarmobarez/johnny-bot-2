@@ -108,7 +108,9 @@ def main():
 
         print(f"Threshold {T}: drawdown computed.")
 
+
     summary_df = pd.DataFrame(summary_rows)
+    summary_df = summary_df.sort_values("rr_threshold").reset_index(drop=True)
     summary_df.to_csv(DRAWDOWN_FILE, index=False)
     print(f"\nStep 6 complete. Summary saved to {DRAWDOWN_FILE}.")
 
