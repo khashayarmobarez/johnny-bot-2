@@ -16,7 +16,7 @@ WEEKLY_REOPEN_WEEKDAY       = 6    # Sunday
 
 PENALTY_PER_N_TRADES        = 10
 
-RAW_DATA_FILE       = "data.csv"
+RAW_DATA_FILE       = "XAU_1m_data.csv"
 RAW_TRADES_FILE     = "trades.csv"
 GROUPED_FOLDER      = "step2_grouped"
 FILTERED_FOLDER     = "step3_filtered"
