@@ -63,13 +63,15 @@ def get_daily_close_hour(dt):
 # DATA LOADING
 # ---------------------------------------------------------------
 
-# REPLACE WITH
+
 def load_minute_data(filepath):
     df = pd.read_csv(
         filepath,
         sep=";",
         header=None,
         names=["datetime", "open", "high", "low", "close", "volume"],
+        skiprows=1,
+        low_memory=False,
     )
     df["datetime"] = pd.to_datetime(df["datetime"], format="%Y.%m.%d %H:%M")
     df = df.set_index("datetime").sort_index()
