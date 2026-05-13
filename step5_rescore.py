@@ -61,6 +61,7 @@ def main():
         print(f"Threshold {T}: {len(df)} trades, score = {score}")
 
     summary_df = pd.DataFrame(summary_rows)
+    summary_df = summary_df.sort_values("rr_threshold").reset_index(drop=True)
     summary_df.to_csv(RESCORE_FILE, index=False)
     print(f"\nStep 5 complete. Summary saved to {RESCORE_FILE}.")
 
