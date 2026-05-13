@@ -22,13 +22,11 @@ def compute_score(df, threshold):
     sl_trades = df["reward_risk"] == "SL"
     sl_score = -int(sl_trades.sum())
 
-    # Gap SL (negative float): add the value directly
-    negative_rr = numeric_rr[numeric_rr < 0]
-    negative_score = float(negative_rr.sum())
+
 
     penalty = math.floor(total_trades / 10)
 
-    score = win_score + below_score + sl_score + negative_score - penalty
+    score = win_score + below_score + sl_score - penalty
     return score
 
 

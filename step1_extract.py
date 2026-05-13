@@ -15,13 +15,11 @@
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
 
 from config import (
     ENTRY_OFFSET,
     SL_OFFSET,
     MIN_RR,
-    DAILY_CLOSE_HOUR_EDT,
     RAW_DATA_FILE,
     RAW_TRADES_FILE,
 )
@@ -212,7 +210,6 @@ def run():
     print(f"  Normal SL      : {normal_sl:,}")
     print(f"  Output         : {RAW_TRADES_FILE}")
     print(f"  Wins (RR >= 1) : {wins:,}")
-    print(f"  Normal SL      : {normal_sl:,}")
 
     # -- Available R/R thresholds for downstream steps --
     numeric_rr = pd.to_numeric(df["reward_risk"], errors="coerce")
