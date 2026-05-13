@@ -44,34 +44,37 @@ def load_survived_trades(threshold=1):
     return merged
 
 
-def calculate_trade_pnl(row, account_balance):
+def calculate_trade_pnl(row, account_balance, risk_pct=0.05, fee_pct=0.005):
     """
-    Calculate PnL for a single trade.
-    - If reward_risk >= 1.0: trade hit 1:1 TP → win $500
-    - If reward_risk == "SL": trade hit stop loss → lose $500
-    - Fixed $500 risk per trade
+    Calculate PnL for a single trade with percentage-based risk.
+    - Risk per trade: 5% of current equity
+    - Fee per trade: 0.5% of current equity (deducted every trade)
+    - If reward_risk >= 1.0: trade hit 1:1 TP → win (risk_amount)
+    - If reward_risk == "SL": trade hit stop loss → lose (risk_amount)
     
-    Returns: (pnl, risk_pct)
+    Returns: (pnl, risk_pct_used)
     """
-    fixed_risk = 500.0
+    risk_amount = account_balance * risk_pct
+    fee = account_balance * fee_pct
+    
     rr = row["reward_risk"]
 
     if rr == "SL":
-        return -fixed_risk, fixed_risk / account_balance
+        return -(risk_amount + fee), risk_pct
     
     try:
         rr_val = float(rr)
         if rr_val >= 1.0:
-            return fixed_risk, fixed_risk / account_balance
+            return (risk_amount - fee), risk_pct
         else:
-            return -fixed_risk, fixed_risk / account_balance
+            return -(risk_amount + fee), risk_pct
     except (ValueError, TypeError):
-        return -fixed_risk, fixed_risk / account_balance
+        return -(risk_amount + fee), risk_pct
 
 
-def run_backtest(trades_df, initial_capital=10000, fixed_risk=500):
+def run_backtest(trades_df, initial_capital=10000, risk_pct=0.05, fee_pct=0.005):
     """
-    Run the backtest simulation.
+    Run the backtest simulation with percentage-based risk.
     """
     if trades_df.empty:
         print("No trades to simulate.")
@@ -97,7 +100,7 @@ def run_backtest(trades_df, initial_capital=10000, fixed_risk=500):
     yearly_data = {}
 
     for idx, row in trades_df.iterrows():
-        pnl, risk_pct = calculate_trade_pnl(row, account_balance)
+        pnl, risk_pct_used = calculate_trade_pnl(row, account_balance, risk_pct, fee_pct)
         account_balance += pnl
         stats["total_trades"] += 1
         stats["total_pnl"] += pnl
@@ -173,11 +176,12 @@ def main():
     # Run backtest
     print("\nRunning backtest...")
     print(f"  Initial capital: $10,000")
-    print(f"  Fixed risk/trade: $500")
+    print(f"  Risk per trade: 5% of equity")
+    print(f"  Fee per trade: 0.5% of equity")
     print(f"  Exit: 1:1 RR or stop loss")
     print()
 
-    result, stats = run_backtest(trades_df, initial_capital=10000, fixed_risk=500)
+    result, stats = run_backtest(trades_df, initial_capital=10000, risk_pct=0.05, fee_pct=0.005)
 
     if result is None:
         return
