@@ -44,13 +44,13 @@ def load_survived_trades(threshold=1):
     return merged
 
 
-def calculate_trade_pnl(row, account_balance, risk_pct=0.025, fee_pct=0.0025):
+def calculate_trade_pnl(row, account_balance, risk_pct=0.025, fee_pct=0.005):
     """
     Calculate PnL for a single trade with percentage-based risk.
     - Risk per trade: 5% of current equity
-    - Fee per trade: 0.25% of current equity (deducted every trade)
-    - If reward_risk >= 1.0: trade hit 1:1 TP -> win (risk_amount)
-    - If reward_risk == "SL": trade hit stop loss -> lose (risk_amount)
+    - Fee per trade: 0.5% of current equity (deducted every trade)
+    - If reward_risk >= 1.0: trade hit 1:1 TP → win (risk_amount)
+    - If reward_risk == "SL": trade hit stop loss → lose (risk_amount)
     
     Returns: (pnl, risk_pct_used)
     """
@@ -72,7 +72,7 @@ def calculate_trade_pnl(row, account_balance, risk_pct=0.025, fee_pct=0.0025):
         return -(risk_amount + fee), risk_pct
 
 
-def run_backtest(trades_df, initial_capital=10000, risk_pct=0.025, fee_pct=0.0025):
+def run_backtest(trades_df, initial_capital=10000, risk_pct=0.025, fee_pct=0.005):
     """
     Run the backtest simulation with percentage-based risk.
     """
@@ -158,7 +158,7 @@ def run_backtest(trades_df, initial_capital=10000, risk_pct=0.025, fee_pct=0.002
 
 def main():
     print("=" * 60)
-    print("TEST BOT - Backtest on Survived Trades (Threshold = 1)")
+    print("TEST BOT — Backtest on Survived Trades (Threshold = 1)")
     print("=" * 60)
 
     # Load survived trades
@@ -177,11 +177,11 @@ def main():
     print("\nRunning backtest...")
     print(f"  Initial capital: $10,000")
     print(f"  Risk per trade: 2.5% of equity")
-    print(f"  Fee per trade: 0.25% of equity")
+    print(f"  Fee per trade: 0.5% of equity")
     print(f"  Exit: 1:1 RR or stop loss")
     print()
 
-    result, stats = run_backtest(trades_df, initial_capital=10000, risk_pct=0.025, fee_pct=0.0025)
+    result, stats = run_backtest(trades_df, initial_capital=10000, risk_pct=0.025, fee_pct=0.005)
 
     if result is None:
         return
@@ -196,12 +196,12 @@ def main():
     print("BACKTEST SUMMARY")
     print("=" * 60)
     print(f"  Total trades     : {stats['total_trades']}")
-    print(f"  - Buys           : {stats['buy_trades']}")
-    print(f"  - Sells          : {stats['sell_trades']}")
+    print(f"  — Buys           : {stats['buy_trades']}")
+    print(f"  — Sells          : {stats['sell_trades']}")
     print(f"  Wins             : {stats['wins']} ({stats['wins']/stats['total_trades']*100:.1f}%)")
     print(f"  Losses           : {stats['losses']} ({stats['losses']/stats['total_trades']*100:.1f}%)")
-    print(f"  - Buy wins       : {stats['buy_wins']}")
-    print(f"  - Sell wins      : {stats['sell_wins']}")
+    print(f"  — Buy wins       : {stats['buy_wins']}")
+    print(f"  — Sell wins      : {stats['sell_wins']}")
     print(f"  Total PnL        : ${stats['total_pnl']:.2f}")
     print(f"  Final balance    : ${stats['final_balance']:.2f}")
     print(f"  Max drawdown     : {stats['max_drawdown']*100:.2f}%")
