@@ -48,7 +48,7 @@ def load_minute_data(filepath):
     df = df.dropna(subset=["open", "high", "low", "close"])
 
     # Remove all data before 2012
-    df = df[df.index >= "2012-01-01"]
+    df = df[df.index >= "2011-01-01"]
 
     return df
 
