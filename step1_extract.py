@@ -8,10 +8,7 @@
 #   date, time, day_of_week, type, entry, stop_loss,
 #   distance, max_profit, reward_risk
 #
-# reward_risk values:
-#   positive float  -> winning trade (ratio >= 1.0)
-#   "SL"            -> normal stop loss hit
-#   negative float  -> gap stop loss (e.g. -3.33)
+
 
 import pandas as pd
 import numpy as np
