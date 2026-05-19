@@ -10,37 +10,20 @@ from config import LISTS_FOLDER, DRAWDOWN_FILE, MIN_RR
 
 
 def get_trade_values(df, reward_level):
-    """
-    Converts each trade's reward_risk into a numeric score value
-    for the given reward level R:
-        >= R          → +R
-        == "SL"       → -1
-        negative float → the negative value itself (e.g. -3.33)
-        positive < R  → -1
-    """
     numeric_rr = pd.to_numeric(df["reward_risk"], errors="coerce")
     values = np.where(
         df["reward_risk"] == "SL", -1.0,
         np.where(
-            numeric_rr < 0, numeric_rr,
-            np.where(
-                numeric_rr >= reward_level, float(reward_level),
-                -1.0
-            )
+            numeric_rr >= reward_level, float(reward_level),
+            -1.0
         )
     )
     return values.astype(float)
 
 
 def get_loss_event_indices(df):
-    """
-    Returns indices of all trades that are a loss event:
-    either "SL" or a negative float (gap SL).
-    """
-    numeric_rr = pd.to_numeric(df["reward_risk"], errors="coerce")
-    is_sl  = df["reward_risk"] == "SL"
-    is_gap = numeric_rr < 0
-    return np.flatnonzero((is_sl | is_gap).to_numpy())
+    is_sl = df["reward_risk"] == "SL"
+    return np.flatnonzero(is_sl.to_numpy())
 
 
 # REPLACE WITH
