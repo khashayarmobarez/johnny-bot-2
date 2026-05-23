@@ -1,6 +1,6 @@
 # test_bot_1_25.py
 # Backtest bot based on survived trades from step3_filtered (threshold = 25)
-# Starting capital: $10,000 | Risk per trade: 4% of equity | Fee: 0.4% of equity
+# Starting capital: $10,000 | Risk per trade: 0.04% of equity | Fee: 0.004% of equity
 # Exit at 1:25 RR (take profit = 25× stop loss distance) or stop loss
 # Only selected Buy/Sell distance files are used; each file is filtered to its own trade type.
 # Output: test_bot_1_25_results.csv + console summary
@@ -71,11 +71,11 @@ def load_survived_trades(threshold=25):
     return merged
 
 
-def calculate_trade_pnl(row, account_balance, risk_pct=0.04, fee_pct=0.004):
+def calculate_trade_pnl(row, account_balance, risk_pct=0.0004, fee_pct=0.00004):
     """
     Calculate PnL for a single trade with percentage-based risk.
-    - Risk per trade: 4% of current equity
-    - Fee per trade: 0.4% of current equity (deducted every trade)
+    - Risk per trade: 0.04% of current equity
+    - Fee per trade: 0.004% of current equity (deducted every trade)
     - If reward_risk >= 25.0: trade hit 1:25 TP -> win (25 × risk_amount)
     - If reward_risk == "SL": trade hit stop loss -> lose (risk_amount)
 
@@ -99,7 +99,7 @@ def calculate_trade_pnl(row, account_balance, risk_pct=0.04, fee_pct=0.004):
         return -(risk_amount + fee), risk_pct
 
 
-def run_backtest(trades_df, initial_capital=10000, risk_pct=0.04, fee_pct=0.004):
+def run_backtest(trades_df, initial_capital=10000, risk_pct=0.0004, fee_pct=0.00004):
     """
     Run the backtest simulation with percentage-based risk.
     """
@@ -197,12 +197,12 @@ def main():
 
     print("\nRunning backtest...")
     print(f"  Initial capital: $10,000")
-    print(f"  Risk per trade: 4% of equity")
-    print(f"  Fee per trade: 0.4% of equity")
+    print(f"  Risk per trade: 0.04% of equity")
+    print(f"  Fee per trade: 0.004% of equity")
     print(f"  Exit: 1:25 RR (TP = 25x SL distance) or stop loss")
     print()
 
-    result, stats = run_backtest(trades_df, initial_capital=10000, risk_pct=0.04, fee_pct=0.004)
+    result, stats = run_backtest(trades_df, initial_capital=10000, risk_pct=0.0004, fee_pct=0.00004)
 
     if result is None:
         return
