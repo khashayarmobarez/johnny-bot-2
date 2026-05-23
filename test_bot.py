@@ -1,18 +1,46 @@
 # test_bot.py
-# Backtest bot based on survived trades from step3_filtered (threshold = 1)
+# Backtest bot based on survived trades from step3_filtered (threshold = 2)
 # Starting capital: $10,000 | Risk per trade: 0.8% of equity | Fee: 0.08% of equity
 # Exit at 1:2 RR (take profit = 2× stop loss distance) or stop loss
+# Only selected Buy/Sell distance files are used; each file is filtered to its own trade type.
 # Output: test_bot_results.csv + console summary
 
 import pandas as pd
 import os
 from config import FILTERED_FOLDER, RAW_TRADES_FILE
 
+BUY_FILES = {
+    "Buy_distance_60.csv", "Buy_distance_26.csv", "Buy_distance_35.csv",
+    "Buy_distance_61.csv", "Buy_distance_69.csv", "Buy_distance_13.csv",
+    "Buy_distance_90.csv", "Buy_distance_103.csv", "Buy_distance_40.csv",
+    "Buy_distance_20.csv", "Buy_distance_49.csv", "Buy_distance_27.csv",
+    "Buy_distance_59.csv", "Buy_distance_31.csv", "Buy_distance_34.csv",
+    "Buy_distance_25.csv", "Buy_distance_64.csv", "Buy_distance_45.csv",
+    "Buy_distance_36.csv", "Buy_distance_32.csv", "Buy_distance_46.csv",
+    "Buy_distance_57.csv", "Buy_distance_12.csv", "Buy_distance_18.csv",
+    "Buy_distance_47.csv", "Buy_distance_48.csv", "Buy_distance_24.csv",
+    "Buy_distance_22.csv", "Buy_distance_104.csv", "Buy_distance_42.csv",
+    "Buy_distance_38.csv", "Buy_distance_28.csv", "Buy_distance_39.csv",
+    "Buy_distance_52.csv", "Buy_distance_14.csv", "Buy_distance_11.csv",
+}
 
-def load_survived_trades(threshold=1):
+SELL_FILES = {
+    "Sell_distance_65.csv", "Sell_distance_38.csv", "Sell_distance_67.csv",
+    "Sell_distance_11.csv", "Sell_distance_18.csv", "Sell_distance_37.csv",
+    "Sell_distance_31.csv", "Sell_distance_112.csv", "Sell_distance_128.csv",
+    "Sell_distance_150.csv", "Sell_distance_91.csv", "Sell_distance_49.csv",
+    "Sell_distance_71.csv", "Sell_distance_215.csv", "Sell_distance_80.csv",
+    "Sell_distance_53.csv", "Sell_distance_63.csv", "Sell_distance_56.csv",
+    "Sell_distance_46.csv", "Sell_distance_81.csv", "Sell_distance_59.csv",
+    "Sell_distance_57.csv", "Sell_distance_28.csv", "Sell_distance_33.csv",
+    "Sell_distance_50.csv", "Sell_distance_45.csv", "Sell_distance_32.csv",
+}
+
+
+def load_survived_trades(threshold=2):
     """
-    Load all survived trades for a given threshold from step3_filtered/{threshold}/
-    Files are named like Buy_distance_XX.csv and Sell_distance_XX.csv
+    Load selected Buy and Sell distance files from step3_filtered/{threshold}/.
+    Buy files are filtered to type == "Buy"; Sell files to type == "Sell".
     """
     subfolder = os.path.join(FILTERED_FOLDER, str(threshold))
     if not os.path.exists(subfolder):
@@ -20,11 +48,15 @@ def load_survived_trades(threshold=1):
         return pd.DataFrame()
 
     frames = []
-    for filename in os.listdir(subfolder):
-        if not filename.endswith(".csv"):
-            continue
+    for filename, trade_type in (
+        [(f, "Buy") for f in sorted(BUY_FILES)] +
+        [(f, "Sell") for f in sorted(SELL_FILES)]
+    ):
         filepath = os.path.join(subfolder, filename)
+        if not os.path.exists(filepath):
+            continue
         df = pd.read_csv(filepath)
+        df = df[df["type"] == trade_type]
         if not df.empty:
             frames.append(df)
 
@@ -158,12 +190,12 @@ def run_backtest(trades_df, initial_capital=10000, risk_pct=0.008, fee_pct=0.000
 
 def main():
     print("=" * 60)
-    print("TEST BOT - Backtest on Survived Trades (Threshold = 1)")
+    print("TEST BOT - Backtest on Survived Trades (Threshold = 2)")
     print("=" * 60)
 
     # Load survived trades
-    print("\nLoading survived trades (threshold=1)...")
-    trades_df = load_survived_trades(threshold=1)
+    print("\nLoading survived trades (threshold=2, selected files only)...")
+    trades_df = load_survived_trades(threshold=2)
 
     if trades_df.empty:
         print("No survived trades found. Exiting.")
