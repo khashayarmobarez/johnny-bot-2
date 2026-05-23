@@ -1,7 +1,7 @@
 # test_bot.py
 # Backtest bot based on survived trades from step3_filtered (threshold = 1)
-# Starting capital: $10,000 | Fixed risk per trade: $500
-# Exit at 1:1 RR or stop loss
+# Starting capital: $10,000 | Risk per trade: 0.8% of equity | Fee: 0.08% of equity
+# Exit at 1:2 RR (take profit = 2× stop loss distance) or stop loss
 # Output: test_bot_results.csv + console summary
 
 import pandas as pd
@@ -44,35 +44,35 @@ def load_survived_trades(threshold=1):
     return merged
 
 
-def calculate_trade_pnl(row, account_balance, risk_pct=0.025, fee_pct=0.0025):
+def calculate_trade_pnl(row, account_balance, risk_pct=0.008, fee_pct=0.0008):
     """
     Calculate PnL for a single trade with percentage-based risk.
-    - Risk per trade: 5% of current equity
-    - Fee per trade: 0.25% of current equity (deducted every trade)
-    - If reward_risk >= 1.0: trade hit 1:1 TP -> win (risk_amount)
+    - Risk per trade: 0.8% of current equity
+    - Fee per trade: 0.08% of current equity (deducted every trade)
+    - If reward_risk >= 2.0: trade hit 1:2 TP -> win (2 × risk_amount)
     - If reward_risk == "SL": trade hit stop loss -> lose (risk_amount)
-    
+
     Returns: (pnl, risk_pct_used)
     """
     risk_amount = account_balance * risk_pct
     fee = account_balance * fee_pct
-    
+
     rr = row["reward_risk"]
 
     if rr == "SL":
         return -(risk_amount + fee), risk_pct
-    
+
     try:
         rr_val = float(rr)
-        if rr_val >= 1.0:
-            return (risk_amount - fee), risk_pct
+        if rr_val >= 2.0:
+            return (2 * risk_amount - fee), risk_pct
         else:
             return -(risk_amount + fee), risk_pct
     except (ValueError, TypeError):
         return -(risk_amount + fee), risk_pct
 
 
-def run_backtest(trades_df, initial_capital=10000, risk_pct=0.025, fee_pct=0.0025):
+def run_backtest(trades_df, initial_capital=10000, risk_pct=0.008, fee_pct=0.0008):
     """
     Run the backtest simulation with percentage-based risk.
     """
@@ -176,12 +176,12 @@ def main():
     # Run backtest
     print("\nRunning backtest...")
     print(f"  Initial capital: $10,000")
-    print(f"  Risk per trade: 2.5% of equity")
-    print(f"  Fee per trade: 0.25% of equity")
-    print(f"  Exit: 1:1 RR or stop loss")
+    print(f"  Risk per trade: 0.8% of equity")
+    print(f"  Fee per trade: 0.08% of equity")
+    print(f"  Exit: 1:2 RR (TP = 2x SL distance) or stop loss")
     print()
 
-    result, stats = run_backtest(trades_df, initial_capital=10000, risk_pct=0.025, fee_pct=0.0025)
+    result, stats = run_backtest(trades_df, initial_capital=10000, risk_pct=0.008, fee_pct=0.0008)
 
     if result is None:
         return
