@@ -1,6 +1,6 @@
 # step1_extract.py
 #
-# Reads 1-minute forex candle data, resamples to 1H candles,
+# Reads 1-minute forex candle data, resamples to 15M candles,
 # simulates one trade per candle close, detects market gap SLs,
 # and writes all results to trades.csv.
 #
@@ -51,17 +51,17 @@ def load_minute_data(filepath):
 
 
 # ---------------------------------------------------------------
-# 1H RESAMPLING
+# 15M RESAMPLING
 # ---------------------------------------------------------------
 
-def resample_to_1h(minute_df):
+def resample_to_15m(minute_df):
     """
-    Resamples 1-minute data into 1-hour OHLCV candles.
-    Candle label is the START of the 1H period.
-    Candle close time = label + 1 hour.
+    Resamples 1-minute data into 15-minute OHLCV candles.
+    Candle label is the START of the 15M period.
+    Candle close time = label + 15 minutes.
     Drops incomplete candles (e.g. partial periods at start/end of data).
     """
-    ohlcv = minute_df.resample("1h", label="left", closed="left").agg(
+    ohlcv = minute_df.resample("15min", label="left", closed="left").agg(
         open=("open", "first"),
         high=("high", "max"),
         low=("low", "min"),
@@ -131,16 +131,16 @@ def run():
     print(f"  To       : {minute_df.index[-1]}")
 
     # -- Resample --
-    print("\nResampling to 1H candles...")
-    candles_1h = resample_to_1h(minute_df)
-    print(f"  1H candles : {len(candles_1h):,}")
+    print("\nResampling to 15M candles...")
+    candles_15m = resample_to_15m(minute_df)
+    print(f"  15M candles : {len(candles_15m):,}")
 
     # -- Simulate --
     print("\nSimulating trades...")
     trades = []
-    total  = len(candles_1h)
+    total  = len(candles_15m)
 
-    for i, (candle_dt, candle) in enumerate(candles_1h.iterrows()):
+    for i, (candle_dt, candle) in enumerate(candles_15m.iterrows()):
 
         if i % 500 == 0:
             print(f"  [{i:>6} / {total}]  {candle_dt.date()}")
@@ -169,9 +169,9 @@ def run():
         if distance == 0:
             continue
 
-        # The 1H candle label is the period START.
-        # The candle closes 1 hour later.
-        candle_close_dt = candle_dt + pd.Timedelta(hours=1)
+        # The 15M candle label is the period START.
+        # The candle closes 15 minutes later.
+        candle_close_dt = candle_dt + pd.Timedelta(minutes=15)
 
         # -- Run simulation --
         max_profit, reward_risk = simulate_trade(
