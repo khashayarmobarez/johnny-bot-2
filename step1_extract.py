@@ -12,6 +12,7 @@
 
 import pandas as pd
 import numpy as np
+from multiprocessing import Pool
 
 from config import (
     ENTRY_OFFSET,
@@ -19,6 +20,7 @@ from config import (
     MIN_RR,
     RAW_DATA_FILE,
     RAW_TRADES_FILE,
+    NUM_WORKERS,
 )
 
 
@@ -112,6 +114,55 @@ def simulate_trade(direction, entry, stop_loss, distance, minute_times, minute_h
 
 
 # ---------------------------------------------------------------
+# PARALLEL WORKER
+# ---------------------------------------------------------------
+
+# Module-level globals populated once per worker process by _init_worker.
+# Using an initializer avoids pickling the large arrays with every task.
+_minute_times = None
+_minute_high  = None
+_minute_low   = None
+
+
+def _init_worker(mt, mh, ml):
+    global _minute_times, _minute_high, _minute_low
+    _minute_times, _minute_high, _minute_low = mt, mh, ml
+
+
+def _process_candle(args):
+    candle_dt, open_price, close_price, high_price, low_price = args
+    if close_price == open_price:
+        return None
+    if close_price > open_price:
+        direction = "Buy"
+        entry     = close_price + ENTRY_OFFSET
+        stop_loss = low_price   - SL_OFFSET
+    else:
+        direction = "Sell"
+        entry     = close_price - ENTRY_OFFSET
+        stop_loss = high_price  + SL_OFFSET
+    distance = abs(entry - stop_loss)
+    if distance == 0:
+        return None
+    candle_close_dt = candle_dt + pd.Timedelta(minutes=15)
+    max_profit, reward_risk = simulate_trade(
+        direction, entry, stop_loss, distance,
+        _minute_times, _minute_high, _minute_low, candle_close_dt,
+    )
+    return {
+        "date"        : candle_close_dt.strftime("%Y-%m-%d"),
+        "time"        : candle_close_dt.strftime("%H:%M"),
+        "day_of_week" : candle_close_dt.strftime("%A"),
+        "type"        : direction,
+        "entry"       : round(entry, 6),
+        "stop_loss"   : round(stop_loss, 6),
+        "distance"    : round(distance, 6),
+        "max_profit"  : max_profit,
+        "reward_risk" : reward_risk,
+    }
+
+
+# ---------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------
 
@@ -135,61 +186,20 @@ def run():
     candles_15m = resample_to_15m(minute_df)
     print(f"  15M candles : {len(candles_15m):,}")
 
-    # -- Simulate --
-    print("\nSimulating trades...")
-    trades = []
-    total  = len(candles_15m)
+    # -- Simulate (parallel) --
+    print(f"\nSimulating trades across {NUM_WORKERS} workers...")
+    candle_args = [
+        (candle_dt, candle["open"], candle["close"], candle["high"], candle["low"])
+        for candle_dt, candle in candles_15m.iterrows()
+    ]
+    with Pool(
+        processes=NUM_WORKERS,
+        initializer=_init_worker,
+        initargs=(minute_times, minute_high, minute_low),
+    ) as pool:
+        results = pool.map(_process_candle, candle_args)
 
-    for i, (candle_dt, candle) in enumerate(candles_15m.iterrows()):
-
-        if i % 500 == 0:
-            print(f"  [{i:>6} / {total}]  {candle_dt.date()}")
-
-        open_price  = candle["open"]
-        close_price = candle["close"]
-        high_price  = candle["high"]
-        low_price   = candle["low"]
-
-        # Skip doji candles (no directional signal)
-        if close_price == open_price:
-            continue
-
-        # -- Direction & prices --
-        if close_price > open_price:
-            direction = "Buy"
-            entry     = close_price + ENTRY_OFFSET
-            stop_loss = low_price   - SL_OFFSET
-        else:
-            direction = "Sell"
-            entry     = close_price - ENTRY_OFFSET
-            stop_loss = high_price  + SL_OFFSET
-
-        distance = abs(entry - stop_loss)
-
-        if distance == 0:
-            continue
-
-        # The 15M candle label is the period START.
-        # The candle closes 15 minutes later.
-        candle_close_dt = candle_dt + pd.Timedelta(minutes=15)
-
-        # -- Run simulation --
-        max_profit, reward_risk = simulate_trade(
-            direction, entry, stop_loss, distance,
-            minute_times, minute_high, minute_low, candle_close_dt,
-        )
-
-        trades.append({
-            "date"        : candle_close_dt.strftime("%Y-%m-%d"),
-            "time"        : candle_close_dt.strftime("%H:%M"),
-            "day_of_week" : candle_close_dt.strftime("%A"),
-            "type"        : direction,
-            "entry"       : round(entry, 6),
-            "stop_loss"   : round(stop_loss, 6),
-            "distance"    : round(distance, 6),
-            "max_profit"  : max_profit,
-            "reward_risk" : reward_risk,
-        })
+    trades = [r for r in results if r is not None]
 
     # -- Save --
     df = pd.DataFrame(trades)
